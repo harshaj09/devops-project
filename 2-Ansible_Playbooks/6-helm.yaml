@@ -1,0 +1,33 @@
+---
+- name: Install Helm
+  hosts: jenkins-slave
+  become: yes
+  tasks:
+    - name: Update apt package manager
+      apt:
+        update_cache: yes
+
+    - name: Install dependencies
+      apt:
+        name: 
+          - apt-transport-https
+          - ca-certificates
+          - curl
+        state: present
+
+    - name: Download Helm install script
+      get_url:
+        url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        dest: /tmp/get-helm-3.sh
+        mode: '0755'
+
+    - name: Run Helm install script
+      command: /tmp/get-helm-3.sh
+
+    - name: Verify Helm installation
+      command: helm version
+      register: helm_version
+
+    - name: Print Helm version
+      debug:
+        msg: "{{ helm_version.stdout }}"

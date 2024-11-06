@@ -1,0 +1,14 @@
+instance_ips = {
+  "ansible" = {
+    "private_ip" = "10.1.0.3"
+    "public_ip" = "34.132.110.158"
+  }
+  "jenkins-master" = {
+    "private_ip" = "10.1.0.2"
+    "public_ip" = "35.226.159.63"
+  }
+  "jenkins-slave" = {
+    "private_ip" = "10.1.0.4"
+    "public_ip" = "34.70.139.43"
+  }
+}

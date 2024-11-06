@@ -1,0 +1,58 @@
+# Slave packages
+
+---
+- hosts: jenkins-slave
+  become: true
+  tasks:
+  - name: Updating the Repository
+    ansible.builtin.apt:
+      update_cache: true
+      cache_valid_time: 3600
+  - name: Install jave for slave
+    apt: 
+      name: openjdk-11-jre
+      state: present
+  - name: Create a home dir for jenkins in slave
+    file:
+      path: /home/siva/jenkins
+      state: directory
+      mode: '0755'
+      owner: siva
+      group: siva
+  - name: Download the java
+    ansible.builtin.get_url:
+      url: wget https://download.java.net/java/GA/jdk17.0.2/dfd4a8d0985749f896bed50d7138ee7f/8/GPL/openjdk-17.0.2_linux-x64_bin.tar.gz
+      dest: /opt/
+  - name: Extracting the java
+    ansible.builtin.unarchive:
+      src: /opt/openjdk-17.0.2_linux-x64_bin.tar.gz
+      dest: /opt
+      remote_src: yes
+  - name: Download Maven Package
+    get_url: 
+      url: https://dlcdn.apache.org/maven/maven-3/3.8.8/binaries/apache-maven-3.8.8-bin.tar.gz
+      dest: /opt/
+  - name: Extract Maven Package 
+    ansible.builtin.unarchive:
+      src: /opt/apache-maven-3.8.8-bin.tar.gz
+      dest: /opt
+      remote_src: yes
+  # Below is to Install docker 
+  - name: Install Docker 
+    ansible.builtin.apt:
+      name: docker.io
+      state: present
+  # Add user to docker group
+  - name: Add User Siva to the group 
+    user:
+      name: siva
+      groups: docker 
+      append: yes 
+  # Set permission on /var/run/docker.sock
+  - name: Set permission on /var/run/docker.sock
+    ansible.builtin.file:
+      path: /var/run/docker.sock
+      mode: '0777'
+  # Install sshpass on the Slave 
+  # Install Kubectl on the Slave , refere 5-kubectl.yaml file for steps
+  

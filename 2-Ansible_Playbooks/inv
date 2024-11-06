@@ -1,0 +1,16 @@
+[jenkins-master]
+10.1.0.2
+[jenkins-master:vars]
+ansible_user=siva
+ansible_ssh_private_key_file=/home/siva/ssh-key
+
+
+[jenkins-slave]
+10.1.0.4
+[jenkins-master:vars]
+ansible_user=siva
+ansible_ssh_private_key_file=/home/siva/ssh-key
+
+
+[all:vars]
+ansible_ssh_common_args='-o StrictHostkeyChecking=accept-new'
