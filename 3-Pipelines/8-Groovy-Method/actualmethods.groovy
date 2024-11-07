@@ -1,5 +1,41 @@
 // This Jenkinsfile is for Eureka microservice
 
+def buildApp() {
+    return {
+        echo "Building the ${env.APPLICATION_NAME} Application"
+        //mvn command 
+        sh 'mvn clean package -DskipTests=true'
+        archiveArtifacts artifacts: 'target/*.jar'
+    }
+}
+
+def dockedBuildandPush() {
+    return {
+        echo "Starting Docker build stage"
+        sh "cp ${WORKSPACE}/target/i27-${env.APPLICATION_NAME}-${env.POM_VERSION}.${env.POM_PACKAGING} ./.cicd/"
+        echo "**************************** Building Docker Image ****************************"
+        sh "docker build --force-rm --no-cache --build-arg JAR_SOURCE=i27-${env.APPLICATION_NAME}-${env.POM_VERSION}.${env.POM_PACKAGING} -t ${env.DOCKER_HUB}/${env.APPLICATION_NAME}:${GIT_COMMIT} ./.cicd"
+        echo "**************************** Login to Docke Repo ****************************"
+        sh "docker login -u ${DOCKER_CREDS_USR} -p ${DOCKER_CREDS_PSW}"
+        echo "**************************** Docker Push ****************************"
+        sh "docker push ${env.DOCKER_HUB}/${env.APPLICATION_NAME}:${GIT_COMMIT}"
+    }
+}
+
+def imageValidation() {
+    return {
+        println ('Pulling the Docker Image')
+        try {
+            sh "docker pull ${env.DOCKER_HUB}/${env.APPLICATION_NAME}:${GIT_COMMIT}"
+        }
+        catch (Exception e) {
+            println ("OOPS!!! Docker Image with this tag not available in the hub, so create the image")
+            buildApp().call()
+            dockedBuildandPush().call()
+        }
+    }
+}
+
 def dockerDeploy(envDeploy, hostPort, contPort) {
     return {
         // for every environment what will change ??
@@ -20,9 +56,8 @@ def dockerDeploy(envDeploy, hostPort, contPort) {
                 }
                 // Create the container
                 echo "Creating the Container"
-                sh "sshpass -p ${PASSWORD} ssh -o StrictHostKeyChecking=no ${USERNAME}@${docker_server_ip} docker run -d -p ${hostPort}:${contPort} --name ${env.APPLICATION_NAME}-${envDeploy} ${env.DOCKER_HUB}/${env.APPLICATION_NAME}:${GIT_COMMIT}"
+                sh "sshpass -p ${PASSWORD} ssh -o StrictHostKeyChecking=no ${USERNAME}@${docker_server_ip} docker run -d -p ${hostPort}:${contPort} --name ${env.APPLICATION_NAME}-$envDeploy ${env.DOCKER_HUB}/${env.APPLICATION_NAME}:${GIT_COMMIT}"
             }
-            
         }
     }
 }
@@ -38,7 +73,7 @@ pipeline {
     parameters {
         choice (name: 'buildOnly', choices: 'no\nyes', description: 'Build the application only')
         choice (name: 'scanOnly', choices: 'no\nyes', description: 'Scan the application only')
-        choice (name: 'dockerPush', choices: 'no\nyes', description: 'Build the Image and push tp repository')
+        choice (name: 'dockerPush', choices: 'no\nyes', description: 'Build the Image and push to repository')
         choice (name: 'deployToDev', choices: 'no\nyes', description: 'This will deploy the application to Dev environment')
         choice (name: 'deployToTest', choices: 'no\nyes', description: 'This will deploy the application to Test environment')
         choice (name: 'deployToStage', choices: 'no\nyes', description: 'This will deploy the application to Stage environment')
@@ -67,10 +102,9 @@ pipeline {
             }
             // This step will take care of building the application
             steps {
-                echo "Building the ${env.APPLICATION_NAME} Application"
-                //mvn command 
-                sh 'mvn clean package -DskipTests=true'
-                archiveArtifacts artifacts: 'target/*.jar'
+                script {
+                    buildApp().call()
+                }
             }
         }
         // stage ('Unit Tests') {
@@ -100,11 +134,11 @@ pipeline {
                 // next goto manage jenkins > configure > sonarqube > give url and token for sonarqube
                 withSonarQubeEnv('SonarQube'){ // SonarQube is the name that we configured in manage jenkins > sonarqube 
                     sh """
-                        mvn sonar:sonar \
-                            -Dsonar.projectKey=i27-eureka \
-                            -Dsonar.host.url=${env.SONAR_URL} \
-                            -Dsonar.login=${SONAR_TOKEN} 
-                        """
+                    mvn sonar:sonar \
+                        -Dsonar.projectKey=i27-eureka \
+                        -Dsonar.host.url=${env.SONAR_URL} \
+                        -Dsonar.login=${SONAR_TOKEN} 
+                    """
                 }
                 timeout (time: 2, unit: 'MINUTES') { // NANOSECONDS, SECONDS, MINUTES, HOURS, DAYS
                     script {
@@ -118,28 +152,18 @@ pipeline {
             //     label 'docker-slave'
             // }
             when {
-                anyOf {
+                allOf {
                     expression {
+                        params.buildOnly == 'yes'
                         params.dockerPush == 'yes'
                     }
                 }
             }
             steps {
-                echo "Starting Docker build stage"
-                sh """
-                ls -la
-                pwd
-                cp ${WORKSPACE}/target/i27-${env.APPLICATION_NAME}-${env.POM_VERSION}.${env.POM_PACKAGING} ./.cicd/
-                echo "Listing Files in .cicd folder"
-                ls -la ./.cicd/
-                echo "**************************** Building Docker Image ****************************"
-                docker build --force-rm --no-cache --build-arg JAR_SOURCE=i27-${env.APPLICATION_NAME}-${env.POM_VERSION}.${env.POM_PACKAGING} -t ${env.DOCKER_HUB}/${env.APPLICATION_NAME}:${GIT_COMMIT} ./.cicd
-                docker images
-                echo "**************************** Login to Docke Repo ****************************"
-                docker login -u ${DOCKER_CREDS_USR} -p ${DOCKER_CREDS_PSW}
-                echo "**************************** Docker Push ****************************"
-                docker push ${env.DOCKER_HUB}/${env.APPLICATION_NAME}:${GIT_COMMIT}
-                """
+                script {
+                    dockedBuildandPush().call()
+                }
+                
             }
         }
         stage ('Deploy To Dev') {
@@ -152,6 +176,7 @@ pipeline {
             }
             steps {
                 script {
+                    imageValidation().call()
                     dockerDeploy('dev', '5761', '8761').call()
                     echo "deployed to dev environment successfully"
                 }
@@ -167,6 +192,7 @@ pipeline {
             }
             steps {
                 script {
+                    imageValidation().call()
                     dockerDeploy('test', '6761', '8761').call()
                     echo "deployed to test environment successfully"
                 }
@@ -182,6 +208,7 @@ pipeline {
             }
             steps {
                 script {
+                    imageValidation().call()
                     dockerDeploy('stage', '7761', '8761').call()
                     echo "deployed to stage environment successfully"
                 }
@@ -189,14 +216,29 @@ pipeline {
         }
         stage ('Deploy To Prod') {
             when {
-                anyOf {
-                    expression {
-                        params.deployToProd == 'yes'
+                allOf {
+                    anyOf {
+                        expression {
+                            params.deployToProd == 'yes'
+                            // any other conditions
+                        }
+                    }
+                    anyOf {
+                        expression {
+                            branch "release/*"
+                            tag pattern: "v\\d{1,2}\\.\\d{1,2}\\.\\d{1,2}", comparator: 'REGEXP'
+                            // any other conditions
+                        }
                     }
                 }
+                
             }
             steps {
+                timeout (time: 300, unit: 'SECONDS') {
+                    input message: "Would you like to deploy ${env.APLLICATION_NAME} application in Prod environment", ok: 'yes', submitter: 'mat' // submitter: 'john, mat'
+                }
                 script {
+                    imageValidation().call()
                     dockerDeploy('prod', '8761', '8761').call()
                     echo "deployed to prod environment successfully"
                 }
