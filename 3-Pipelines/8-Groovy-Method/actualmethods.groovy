@@ -35,6 +35,15 @@ pipeline {
         maven 'Maven-3.8.8'
         jdk 'JDK-17'
     }
+    parameters {
+        choice (name: 'buildOnly', choices: 'no\nyes', description: 'Build the application only')
+        choice (name: 'scanOnly', choices: 'no\nyes', description: 'Scan the application only')
+        choice (name: 'dockerPush', choices: 'no\nyes', description: 'Build the Image and push tp repository')
+        choice (name: 'deployToDev', choices: 'no\nyes', description: 'This will deploy the application to Dev environment')
+        choice (name: 'deployToTest', choices: 'no\nyes', description: 'This will deploy the application to Test environment')
+        choice (name: 'deployToStage', choices: 'no\nyes', description: 'This will deploy the application to Stage environment')
+        choice (name: 'deployToProd' choices: 'no\nyes', description: 'This will deploy the application to Prod environment')
+    }
     environment {
         APPLICATION_NAME = "eureka"
         // https://www.jenkins.io/doc/pipeline/steps/pipeline-utility-steps/#readmavenpom-read-a-maven-project-file
@@ -49,6 +58,13 @@ pipeline {
     }
     stages {
         stage ('Build') {
+            when {
+                anyOf {
+                    expression {
+                        params.buildOnly == 'yes'
+                    }
+                }
+            }
             // This step will take care of building the application
             steps {
                 echo "Building the ${env.APPLICATION_NAME} Application"
@@ -70,6 +86,13 @@ pipeline {
         //     }
         // }
         stage ('Sonar') {
+            when {
+                anyOf {
+                    expression {
+                        params.scanOnly == 'yes'
+                    }
+                }
+            }
             steps {
                 // Code Quality needs to be implemented 
                 echo "Starting Sonar Scans with Quality Gates"
@@ -94,6 +117,13 @@ pipeline {
             // agent {
             //     label 'docker-slave'
             // }
+            when {
+                anyOf {
+                    expression {
+                        params.dockerPush == 'yes'
+                    }
+                }
+            }
             steps {
                 echo "Starting Docker build stage"
                 sh """
@@ -113,6 +143,13 @@ pipeline {
             }
         }
         stage ('Deploy To Dev') {
+            when {
+                anyOf {
+                    expression {
+                        params.deployToDev == 'yes'
+                    }
+                }
+            }
             steps {
                 script {
                     dockerDeploy('dev', '5761', '8761').call()
@@ -121,6 +158,13 @@ pipeline {
             }
         }
         stage ('Deploy To Test') {
+            when {
+                anyOf {
+                    expression {
+                        params.deployToTest == 'yes'
+                    }
+                }
+            }
             steps {
                 script {
                     dockerDeploy('test', '6761', '8761').call()
@@ -129,6 +173,13 @@ pipeline {
             }
         }
         stage ('Deploy To Stage') {
+            when {
+                anyOf {
+                    expression {
+                        params.deployToStage == 'yes'
+                    }
+                }
+            }
             steps {
                 script {
                     dockerDeploy('stage', '7761', '8761').call()
@@ -137,6 +188,13 @@ pipeline {
             }
         }
         stage ('Deploy To Prod') {
+            when {
+                anyOf {
+                    expression {
+                        params.deployToProd == 'yes'
+                    }
+                }
+            }
             steps {
                 script {
                     dockerDeploy('prod', '8761', '8761').call()
