@@ -29,11 +29,25 @@ def call(Map pipelineParams) {
             POM_ARTIFACTID = readMavenPom().getArtifactId()
         }
         stages {
-            stage ('Addition Method') {
+            stage ('AdditionMethod') {
                 steps {
                     script {
                         echo "****** Using Addition Method ******"
                         println docker.add(20,35)
+                    }
+                }
+            }
+            stage ('BuildStage') {
+                when {
+                    anyOf {
+                        expression {
+                            params.BuildOnly == 'yes'
+                        }
+                    }
+                }
+                steps {
+                    script {
+                        docker.build("${env.APPLICATION_NAME}")
                     }
                 }
             }

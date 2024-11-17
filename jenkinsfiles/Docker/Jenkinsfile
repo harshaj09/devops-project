@@ -1,4 +1,4 @@
 @Library("com.kesava.slab@main") _
-DockerPipeline (
+DockerPipeline(
     appName: 'eureka'
 )

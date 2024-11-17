@@ -7,4 +7,10 @@ class Docker {
     def add(firstNumber, secondNumber) {
         return firstNumber+secondNumber
     }
+    def build(appName) {
+        jenkins.sh """
+        echo "Building the artifact for ${appName} application"
+        mvn clean package -DskipTests=true
+        """
+    }
 }
