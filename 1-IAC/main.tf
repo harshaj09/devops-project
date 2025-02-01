@@ -113,6 +113,10 @@ resource "google_compute_instance" "tf-vm-instances" {
   }
 
   # Copy the private key to all the machines
+  provisioner "file" {
+    source = "${path.module}/id_rsa"
+    destination = "/home/${var.username}/id_rsa"
+  }
 
 }
 
